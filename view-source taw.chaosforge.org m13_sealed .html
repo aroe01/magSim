@@ -1,0 +1,272 @@
+<!doctype html>
+<html>
+<head>
+  <title>M13 Sealed Simulator</title>
+  <script src="cards_m13.js"></script>
+  <script src="jquery-1.7.2.js"></script>
+  <script>
+  var compact_layout = false;
+  
+  var randint = function(n) {
+    return Math.floor(Math.random() * n);
+  }
+  var randelem = function(ary) {
+    return ary[randint(ary.length)];
+  }
+  var randelems = function(ary, n) {
+    var rv = [];
+    for(var i=0; i<n; i++){
+      e = randelem(ary);
+      while($.inArray(e, rv) != -1) {
+        e = randelem(ary);
+      }
+      rv.push(e)
+    }
+    return rv;
+  }
+
+  var sortby = function(ary, sort_key_fun){
+    var ary2 = [];
+    var rv = [];
+    var i, sk;
+    for(i=0; i<ary.length; i++) {
+      sk = sort_key_fun(ary[i]);
+      ary2.push([sk, ary[i]]);
+    }
+    ary2.sort();
+    for(i=0; i<ary2.length; i++) {
+      rv.push(ary2[i][1]);
+    }
+    return rv;
+  }
+
+  var sorted_card_list = function(cards) {
+    var cnts = {};
+    var i, n, l, c;
+    for(i=0; i<cards.length; i++) {
+      n = cards[i][0];
+      if(!cnts[n]) cnts[n] = 0;
+      cnts[n] += 1;
+    }
+    var entries = [];
+    for(n in cnts) {
+      c = cnts[n];
+      l = "" +  c +  "x " + n;
+      entries.push([n, l]);
+    }
+    entries.sort();
+    var rv = [];
+    for(i=0; i<entries.length; i++) {
+      rv.push(entries[i][1]);
+    }
+    return rv;
+  }
+  
+  /* According to:
+    http://www.reddit.com/r/magicTCG/comments/snzvt/simple_avr_sealed_simulator_i_just_made/c4fk0sr
+  */
+  var random_foil = function(boosters) {
+    var i = randint(128);
+    var c;
+    if(i <= 0) {
+      c = randelem(mythics);
+    } else if(i <= 8) {
+      c = randelem(rares);
+    } else if(i <= 16) {
+      c = randelem(basic_lands);
+    } else if(i <= 40) {
+      c = randelem(uncommons);
+    } else {
+      c = randelem(commons);
+    }
+    return [c[0], c[1], c[2], c[3], 'foil'];
+  }
+  
+  var random_cards = function(boosters) {
+    var cards = [];
+    var commons0, uncommons0;
+    var i, j;
+    
+    for(i=0; i<boosters; i++){
+      if(Math.random() > 1/8) {
+        cards.push(randelem(rares));
+      } else {
+        cards.push(randelem(mythics));
+      }
+      uncommons0 = randelems(uncommons, 3);
+      if(Math.random() > 15/63) {
+        commons0 = randelems(commons, 10);
+      } else {
+        commons0 = randelems(commons, 9);
+        cards.push(random_foil());
+      }
+      cards.push(randelem(basic_lands));
+
+      for(j=0; j<uncommons0.length; j++)
+        cards.push(uncommons0[j]);
+      for(j=0; j<commons0.length; j++)
+        cards.push(commons0[j]);
+    }
+    return sortby(cards, function(c){
+      return c[3];
+    });
+  }
+  
+  var current_cards = null;
+  
+  var open_boosters = function() {
+    var boosters = $("#booster_count").val();
+    current_cards = random_cards(boosters);
+    
+    if(compact_layout) {
+      expanded_layout();
+      alt_layout();
+    } else {
+      expanded_layout();
+    }
+    set_textbox();
+  };
+  
+  var set_textbox = function() {
+    var parent2 = $("#boosterstxt");
+    parent2.empty();
+    var card_list = sorted_card_list(current_cards);
+    for(i=0; i<card_list.length; i++) {
+      var h = "<span>" + card_list[i] + "</span><br />"
+      parent2.append(h);
+    };
+  };
+
+  var expanded_layout = function() {
+    var parent = $("#boosters");
+    parent.empty();
+    for(i=0; i<current_cards.length; i++){
+      var e;
+      if (current_cards[i][4] == 'foil') {
+        e = "<img src='" + current_cards[i][2]  + "' class='foil'>"
+      } else {
+        e = "<img src='" + current_cards[i][2]  + "' class='nonfoil'>"
+      }
+      parent.append(e);
+    }
+    $("#boosters").css("height", "auto");
+  };
+  
+  var alt_layout = function() {
+    $("#boosters img").each(function(i,val){
+       a = $(this).first().attr("src").split("/")[0];
+       b = "";
+       if(a == "mythics") {
+           b = "mythic";
+       } else if(a == "rares") {
+           b = "rare";
+       } else if(a == "commons") {
+           b = "common";
+       } else if(a == "uncommons") {
+           b = "uncommon";
+       } else if(a == "basic_lands") {
+           b = "basic_land";
+       }
+       $(this).first().css("display","block");
+       $(this).first().css("margin-left","-16px");
+       $(this).first().css("margin-top","-17px");
+       $(this).first().wrap("<div id=" + i + " class='card " + b + "' />");
+       //$(this).first().attr("id",i);
+    });
+    $(".card").each(function(){
+       $(this).first().css("float","left");
+       $(this).first().css("overflow","hidden");
+       $(this).first().css("height","343px");
+       $(this).first().css("margin-right","5px");
+       $(this).first().css("width","238px");
+       $(this).first().css("position","absolute");
+       $(this).first().mouseenter(function() {
+           $(this).first().css("z-index","1");
+        }).mouseleave(function() {
+           $(this).first().css("z-index","0");
+       });
+    });
+    var max_i = 0;
+    $(".mythic").each(function(i,val){
+      if(i>max_i) max_i = i;
+      $(this).first().css("left","0px");
+      $(this).first().css("margin-top",i * 25 + "px");
+    });
+    $(".rare").each(function(i,val){
+      if(i>max_i) max_i = i;
+      $(this).first().css("left","250px");
+      $(this).first().css("margin-top",i * 25 + "px");
+    });
+    $(".uncommon").each(function(i,val){
+       if(i>max_i) max_i = i;
+       $(this).first().css("left","500px");
+       $(this).first().css("margin-top",i * 25 + "px");
+    });
+    $(".common").each(function(i,val){
+      if(i>max_i) max_i = i;
+      $(this).first().css("left","750px");
+      $(this).first().css("margin-top",i * 25 + "px");
+    });
+    $(".basic_land").each(function(i,val){
+      if(i>max_i) max_i = i;
+      $(this).first().css("left","990px");
+      $(this).first().css("margin-top",i * 25 + "px");
+    });
+    $("#boosters").css("height", (max_i*25 + 370) + "px");
+  }
+  
+  $(function(){
+    $("#open_boosters").click(open_boosters);
+    $("#switch_layout").click(function(){
+      compact_layout = !compact_layout;
+      if(compact_layout) {
+        alt_layout();
+      } else {
+        expanded_layout();
+      }
+    });
+    open_boosters();
+  });
+  </script>
+  <style>
+  #boosters {
+    border: 1px solid black;
+    background-color: #CCC;
+  }
+  .nonfoil {
+    width: 265px;
+    height: 370px;
+    border: 3px solid white;
+  }
+  .foil {
+    width: 265px;
+    height: 370px;
+    border: 3px solid red;
+  }
+  </style>
+</head>
+<body>
+  <h1>M13 Sealed Simulator</h1>
+
+  <div>
+    Number of boosters to open: <input id='booster_count' value='6' />
+  </div>
+  <div>
+    <button id="open_boosters">Open boosters</button>
+    <button id="switch_layout">Switch layout</button>
+  </div>
+
+  <h3>Cards</h3>
+  <div id='boosters'>
+  </div>
+
+  <h3>Text</h3>
+  <div id='boosterstxt'>
+  </div>
+
+  <h3>Contact</h3>
+  <div>
+    For any questions contact Tomasz.Wegrzanowski@gmail.com
+  </div>
+</body>
+</html>
